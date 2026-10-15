@@ -1,0 +1,275 @@
+#!/usr/bin/env python3
+"""A markdown issue hub that many agent sessions can share.
+
+    issue-hub init ~/notes/hub --prefix ABC --repo ~/code/app   # create a hub
+    issue-hub reserve "Title of the issue"                      # prints ABC-12
+    issue-hub reserve --count 3 "Project phases"                # ABC-13 ABC-14 ABC-15
+    issue-hub next                                              # what reserve would give, no lock
+    issue-hub check 12                                          # every place ABC-12 appears
+    issue-hub list                                              # recent reservations
+    issue-hub where                                             # the hub this command resolves to
+    issue-hub board                                             # browse and edit it in a browser
+
+The hub is found from `--hub`, then `$ISSUE_HUB`, then the nearest parent of
+the current directory holding `hub.json`.
+
+A number is taken once it appears anywhere: an issue file, the README, the
+ledger, or a commit message or branch name in the hub or any repo listed in
+`hub.json`. `reserve` holds an exclusive lock on the ledger while it scans
+those places and appends the new numbers, so two sessions filing at once can
+never get the same one.
+"""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import os
+import re
+import subprocess
+import sys
+from datetime import date, datetime
+from pathlib import Path
+
+SKILL = Path(__file__).resolve().parent.parent
+TEMPLATES = SKILL / "templates"
+LEDGER_NAME = "reservations.tsv"
+LEDGER_HEADER = "number\treserved_at\ttitle\tcwd\n"
+PREFIX_RE = re.compile(r"^[A-Z][A-Z0-9]*$")
+
+
+class Hub:
+    def __init__(self, root: Path):
+        self.root = root
+        config = json.loads((root / "hub.json").read_text())
+        self.prefix = config["prefix"]
+        self.repos = [Path(r).expanduser() for r in config.get("repos", [])]
+        self.ledger = root / LEDGER_NAME
+        self.number_re = re.compile(rf"\b{re.escape(self.prefix)}-(\d+)\b", re.IGNORECASE)
+
+    def numbers_in(self, text: str) -> set[int]:
+        return {int(n) for n in self.number_re.findall(text)}
+
+
+def find_hub(explicit: Path | None) -> Hub:
+    candidates = []
+    if explicit:
+        candidates.append(explicit.expanduser())
+    elif os.environ.get("ISSUE_HUB"):
+        candidates.append(Path(os.environ["ISSUE_HUB"]).expanduser())
+    else:
+        here = Path.cwd().resolve()
+        candidates.extend([here, *here.parents])
+    for candidate in candidates:
+        if (candidate / "hub.json").exists():
+            return Hub(candidate.resolve())
+    sys.exit("issue-hub: no hub found. Pass --hub, set ISSUE_HUB, or run inside a hub (a folder with hub.json).")
+
+
+def ledger_numbers(text: str) -> set[int]:
+    numbers = set()
+    for line in text.splitlines()[1:]:
+        head = line.split("\t", 1)[0]
+        if head.isdigit():
+            numbers.add(int(head))
+    return numbers
+
+
+def hub_numbers(hub: Hub) -> dict[str, set[int]]:
+    files = set()
+    for path in (hub.root / "issues").glob(f"{hub.prefix}-*.md"):
+        match = hub.number_re.fullmatch(path.stem)
+        if match:
+            files.add(int(match.group(1)))
+    readme = hub.root / "README.md"
+    readme_numbers = hub.numbers_in(readme.read_text()) if readme.exists() else set()
+    return {"issue files": files, "README": readme_numbers}
+
+
+def git_numbers(hub: Hub, repo: Path) -> dict[str, set[int]]:
+    if not (repo / ".git").exists():
+        return {}
+    log = git(repo, "log", "--all", "--format=%s%n%b")
+    refs = git(repo, "for-each-ref", "--format=%(refname:short)")
+    return {
+        f"commits ({repo.name})": hub.numbers_in(log),
+        f"branches ({repo.name})": hub.numbers_in(refs),
+    }
+
+
+def git(repo: Path, *args: str) -> str:
+    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+    if result.returncode != 0:
+        if "does not have any commits" in result.stderr:
+            return ""
+        sys.exit(f"issue-hub: git {' '.join(args)} failed in {repo}:\n{result.stderr.strip()}")
+    return result.stdout
+
+
+def all_sources(hub: Hub, ledger_text: str) -> dict[str, set[int]]:
+    sources = hub_numbers(hub)
+    sources["ledger"] = ledger_numbers(ledger_text)
+    sources.update(git_numbers(hub, hub.root))
+    for repo in hub.repos:
+        sources.update(git_numbers(hub, repo))
+    return sources
+
+
+def highest(sources: dict[str, set[int]]) -> int:
+    return max((max(numbers) for numbers in sources.values() if numbers), default=0)
+
+
+def read_ledger(hub: Hub) -> str:
+    return hub.ledger.read_text() if hub.ledger.exists() else LEDGER_HEADER
+
+
+def reserve(hub: Hub, title: str, count: int) -> list[int]:
+    clean_title = " ".join(title.split())
+    with open(hub.ledger, "a+") as ledger:
+        fcntl.flock(ledger, fcntl.LOCK_EX)
+        try:
+            ledger.seek(0)
+            text = ledger.read()
+            if not text:
+                ledger.write(LEDGER_HEADER)
+                text = LEDGER_HEADER
+            start = highest(all_sources(hub, text)) + 1
+            numbers = list(range(start, start + count))
+            stamp = datetime.now().astimezone().isoformat(timespec="seconds")
+            for number in numbers:
+                ledger.write(f"{number}\t{stamp}\t{clean_title}\t{os.getcwd()}\n")
+            ledger.flush()
+            os.fsync(ledger.fileno())
+        finally:
+            fcntl.flock(ledger, fcntl.LOCK_UN)
+    return numbers
+
+
+def check(hub: Hub, number: int) -> None:
+    sources = all_sources(hub, read_ledger(hub))
+    hits = [name for name, numbers in sources.items() if number in numbers]
+    if hits:
+        print(f"{hub.prefix}-{number} is taken: {', '.join(hits)}")
+    else:
+        print(f"{hub.prefix}-{number} is free (highest in use is {hub.prefix}-{highest(sources)})")
+
+
+def init(root: Path, prefix: str, name: str, repos: list[Path]) -> None:
+    root = root.expanduser().resolve()
+    if (root / "hub.json").exists():
+        sys.exit(f"issue-hub: {root} is already a hub.")
+    if root.exists() and any(root.iterdir()):
+        sys.exit(f"issue-hub: {root} is not empty.")
+    for folder in ("issues", "projects", "documents"):
+        (root / folder).mkdir(parents=True, exist_ok=True)
+
+    config = {"name": name, "prefix": prefix, "repos": [str(r.expanduser().resolve()) for r in repos]}
+    (root / "hub.json").write_text(json.dumps(config, indent=2) + "\n")
+    (root / LEDGER_NAME).write_text(LEDGER_HEADER)
+    values = {
+        "{{NAME}}": name,
+        "{{PREFIX}}": prefix,
+        "{{prefix}}": prefix.lower(),
+        "{{DATE}}": date.today().isoformat(),
+        "{{HUB}}": str(root).replace(str(Path.home()), "~", 1),
+    }
+    for template, target in (
+        ("README.md", "README.md"),
+        ("ROADMAP.md", "ROADMAP.md"),
+        ("issue.md", "templates/issue.md"),
+        ("project.md", "templates/project.md"),
+    ):
+        (root / target).parent.mkdir(exist_ok=True)
+        (root / target).write_text(fill(TEMPLATES / template, values))
+    for folder in ("issues", "projects", "documents"):
+        (root / folder / ".gitkeep").touch()
+
+    if not (root / ".git").exists():
+        subprocess.run(["git", "-C", str(root), "init", "-q"], check=True)
+    print(f"Created the {name} hub at {root} with prefix {prefix}-.")
+    print("Commit it, then add these lines to each code repo's AGENTS.md or CLAUDE.md:\n")
+    print(fill(TEMPLATES / "AGENTS-snippet.md", values))
+
+
+def fill(template: Path, values: dict[str, str]) -> str:
+    text = template.read_text()
+    for key, value in values.items():
+        text = text.replace(key, value)
+    return text
+
+
+def parse_number(text: str) -> int:
+    tail = text.rpartition("-")[2]
+    if not tail.isdigit():
+        raise argparse.ArgumentTypeError(f"not an issue number: {text}")
+    return int(tail)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="A markdown issue hub that many agent sessions can share.")
+    parser.add_argument("--hub", type=Path, help="hub directory (default: $ISSUE_HUB, else the nearest parent with hub.json)")
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    init_parser = commands.add_parser("init", help="create a new hub")
+    init_parser.add_argument("path", type=Path)
+    init_parser.add_argument("--prefix", required=True, help="issue prefix, e.g. ABC for ABC-12")
+    init_parser.add_argument("--name", help="project name shown in the README (default: the prefix)")
+    init_parser.add_argument("--repo", type=Path, action="append", default=[],
+                             help="code repo whose commits and branches hold numbers (repeatable)")
+
+    reserve_parser = commands.add_parser("reserve", help="reserve the next number(s)")
+    reserve_parser.add_argument("title", help="issue title, recorded in the ledger")
+    reserve_parser.add_argument("--count", type=int, default=1, help="how many consecutive numbers")
+
+    commands.add_parser("next", help="show the next number without reserving it")
+
+    check_parser = commands.add_parser("check", help="show where a number is used")
+    check_parser.add_argument("number", type=parse_number)
+
+    list_parser = commands.add_parser("list", help="show recent reservations")
+    list_parser.add_argument("-n", type=int, default=10)
+
+    commands.add_parser("where", help="print the hub directory and its settings")
+
+    board_parser = commands.add_parser("board", help="serve the hub as a board in the browser")
+    board_parser.add_argument("--port", type=int, default=8787)
+    board_parser.add_argument("--no-open", action="store_true")
+
+    args = parser.parse_args()
+
+    if args.command == "init":
+        prefix = args.prefix.upper()
+        if not PREFIX_RE.match(prefix):
+            parser.error("--prefix must be letters and digits, starting with a letter")
+        init(args.path, prefix, args.name or prefix, args.repo)
+        return
+
+    hub = find_hub(args.hub)
+    if args.command == "reserve":
+        if args.count < 1:
+            parser.error("--count must be at least 1")
+        if not args.title.strip():
+            parser.error("title must not be empty")
+        print(" ".join(f"{hub.prefix}-{n}" for n in reserve(hub, args.title, args.count)))
+    elif args.command == "next":
+        print(f"{hub.prefix}-{highest(all_sources(hub, read_ledger(hub))) + 1}")
+    elif args.command == "check":
+        check(hub, args.number)
+    elif args.command == "list":
+        lines = read_ledger(hub).splitlines()[1:]
+        print("\n".join(lines[-args.n:]) if lines else "No reservations yet.")
+    elif args.command == "where":
+        print(f"hub     {hub.root}\nprefix  {hub.prefix}-")
+        for repo in hub.repos:
+            print(f"repo    {repo}{'' if (repo / '.git').exists() else '  (missing)'}")
+    elif args.command == "board":
+        serve = Path(__file__).resolve().parent / "board" / "serve.py"
+        command = [sys.executable, str(serve), "--hub", str(hub.root), "--port", str(args.port)]
+        if args.no_open:
+            command.append("--no-open")
+        os.execv(sys.executable, command)
+
+
+if __name__ == "__main__":
+    main()

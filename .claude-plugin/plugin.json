@@ -1,0 +1,8 @@
+{
+  "name": "issue-hub",
+  "version": "0.1.0",
+  "description": "A local markdown issue hub that many agent sessions share safely: collision-free issue numbers, a roadmap that holds the project's state, commit-to-issue links, illustrated project plans, and a local board.",
+  "author": { "name": "Mueed Qadri" },
+  "license": "MIT",
+  "keywords": ["issues", "project-management", "markdown", "agents", "workflow"]
+}

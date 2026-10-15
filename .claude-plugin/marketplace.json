@@ -1,0 +1,16 @@
+{
+  "name": "issue-hub",
+  "owner": {
+    "name": "Mueed Qadri"
+  },
+  "metadata": {
+    "description": "A markdown issue hub for working with coding agents."
+  },
+  "plugins": [
+    {
+      "name": "issue-hub",
+      "source": "./",
+      "description": "A local markdown issue hub that many agent sessions share safely."
+    }
+  ]
+}
