@@ -2,12 +2,13 @@
 
 ## Metadata
 - **Status:** In Progress
+- **Kind:** Feature
 - **Priority:** Medium (3)
 - **Assignee:** None
 - **Estimate:** Small
 - **Due Date:** N/A
 - **Project:** [Offline Forecasts](../projects/offline-forecasts.md)
-- **Labels:** Offline, Background
+- **Labels:** Offline, iOS
 
 ## Description
 

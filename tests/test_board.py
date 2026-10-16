@@ -39,6 +39,10 @@ def main() -> int:
     check("projects parsed", len(hub.projects) == 1, f"{len(hub.projects)}")
     check("documents parsed", len(hub.docs) == 1, f"{len(hub.docs)}")
     check("project plan found", hub.projects["offline-forecasts"].has_plan)
+    check("kinds parsed", {i.id: i.kind for i in hub.issues.values()} ==
+          {"PW-1": "Feature", "PW-2": "Feature", "PW-3": "Improvement", "PW-4": "Bug", "PW-5": "Feature"},
+          str({i.id: i.kind for i in hub.issues.values()}))
+    check("card carries kind", hub.issues["PW-4"].card()["kind"] == "Bug")
 
     counts = {status: 0 for status in hubparse.STATUSES}
     for issue in hub.issues.values():

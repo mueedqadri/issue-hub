@@ -180,7 +180,7 @@
     font-size: 10.5px; padding: 1.5px 6px; border-radius: 20px;
     background: var(--ground); border: 1px solid var(--rule); color: var(--ink-faint);
   }
-  .chip.proj {
+  .chip.proj, .chip.kind {
     border-color: transparent;
     background: hsl(var(--h, 187) var(--chip-s) var(--chip-bg));
     color: hsl(var(--h, 187) var(--chip-s) var(--chip-ink));
@@ -310,6 +310,7 @@
   </div>
   <div class="filters">
     <input type="search" id="q" placeholder="Search id, title, label…" autocomplete="off">
+    <div class="picker" id="fkind"></div>
     <div class="picker" id="fproj"></div>
     <div class="picker" id="flabel"></div>
     <button class="ghost" id="clear">Clear</button>
@@ -469,15 +470,26 @@ function matches(issue) {
   const q = $("#q").value.trim().toLowerCase();
   const projects = PICKERS.project ? PICKERS.project.values : new Set();
   const labels = PICKERS.label ? PICKERS.label.values : new Set();
+  const kinds = PICKERS.kind ? PICKERS.kind.values : new Set();
+  if (kinds.size && !kinds.has(issue.kind || NO_KIND)) return false;
   if (projects.size && !projects.has(issue.projectSlug || NO_PROJECT)) return false;
   if (labels.size && !issue.labels.some((l) => labels.has(l))) return false;
   if (!q) return true;
-  const hay = [issue.id, issue.title, issue.projectName || "", issue.labels.join(" ")]
+  const hay = [issue.id, issue.title, issue.kind || "", issue.projectName || "", issue.labels.join(" ")]
     .join(" ").toLowerCase();
   return hay.includes(q);
 }
 
 /* ------------------------------------------------------------- board */
+
+const KIND_HUES = { Bug: 4, Feature: 145, Improvement: 212, Task: 38 };
+const NO_KIND = "\u0000no-kind";
+
+function kindChip(kind) {
+  if (!kind) return "";
+  const hue = KIND_HUES[kind] ?? hueOf(kind);
+  return ` <span class="chip kind" style="--h:${hue}">${esc(kind)}</span>`;
+}
 
 function cardEl(issue) {
   const el = document.createElement("article");
@@ -492,7 +504,7 @@ function cardEl(issue) {
     : "";
   el.innerHTML =
     `<div class="top"><span class="pri p${issue.priorityNum}" title="${esc(issue.priority)}"></span>` +
-    `<span class="id">${issue.id}</span>` +
+    `<span class="id">${issue.id}</span>` + kindChip(issue.kind) +
     (issue.commentCount ? `<span class="cc">${issue.commentCount} ✦</span>` : "") +
     `</div><div class="t">${esc(issue.title)}</div>` +
     (project || labels || more ? `<div class="meta">${project}${labels}${more}</div>` : "");
@@ -661,8 +673,8 @@ async function showIssue(id) {
       selectEl("Priority", STATE.data.priorities.map((p) => ({ value: p, label: p })), issue.priority) +
       selectEl("Project", projectOptions, issue.projectSlug || "") +
     `</div>` +
-    (issue.labels.length || stamps
-      ? `<div class="meta" style="margin-top:12px">` +
+    (issue.kind || issue.labels.length || stamps
+      ? `<div class="meta" style="margin-top:12px">` + kindChip(issue.kind).trim() +
         issue.labels.map((l) => `<span class="chip">${esc(l)}</span>`).join("") +
         (stamps ? `<span class="hint" style="margin-left:4px">${esc(stamps)}</span>` : "") +
         `</div>`
@@ -807,9 +819,11 @@ async function boot() {
   $("#count").textContent = `${STATE.data.issues.length} issues · ${STATE.data.projects.length} projects`;
 
   const labelCounts = {};
+  const kindCounts = {};
   let unassigned = 0;
   for (const issue of STATE.data.issues) {
     if (!issue.projectSlug) unassigned++;
+    kindCounts[issue.kind || NO_KIND] = (kindCounts[issue.kind || NO_KIND] || 0) + 1;
     for (const label of issue.labels) labelCounts[label] = (labelCounts[label] || 0) + 1;
   }
 
@@ -819,6 +833,14 @@ async function boot() {
     options: STATE.data.projects
       .map((p) => ({ value: p.slug, label: p.name, count: p.total }))
       .concat(unassigned ? [{ value: NO_PROJECT, label: "\u2014 no project \u2014", count: unassigned }] : []),
+    onChange: refilter,
+  });
+  const kindNames = STATE.data.kinds.concat(Object.keys(kindCounts).filter((k) => k !== NO_KIND && !STATE.data.kinds.includes(k)));
+  PICKERS.kind = makePicker($("#fkind"), {
+    allLabel: "All kinds",
+    searchLabel: "Filter kinds\u2026",
+    options: kindNames.filter((k) => kindCounts[k]).map((k) => ({ value: k, label: k, count: kindCounts[k] }))
+      .concat(kindCounts[NO_KIND] ? [{ value: NO_KIND, label: "\u2014 no kind \u2014", count: kindCounts[NO_KIND] }] : []),
     onChange: refilter,
   });
   PICKERS.label = makePicker($("#flabel"), {
@@ -835,6 +857,7 @@ async function boot() {
 $("#q").addEventListener("input", refilter);
 $("#clear").addEventListener("click", () => {
   $("#q").value = "";
+  PICKERS.kind?.clear();
   PICKERS.project?.clear();
   PICKERS.label?.clear();
   refilter();

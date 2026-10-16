@@ -2,6 +2,7 @@
 
 ## Metadata
 - **Status:** Canceled
+- **Kind:** Feature
 - **Priority:** No priority (0)
 - **Assignee:** None
 - **Estimate:** Small

@@ -10,8 +10,9 @@ The hub is a plain git repo of markdown, separate from the code:
 
 ```
 <hub>/
-  hub.json             {"name", "prefix", "repos"}: issue prefix and the code repos it tracks
-  ROADMAP.md           the state of the project on one page; read it first
+  hub.json             prefix, tracked code repos, and the hub's kinds and labels
+  HUB.md               this hub's house rules; read it before any change
+  ROADMAP.md           the state of the project on one page
   README.md            index of projects and of every issue by status
   issues/<P>-<n>.md    one file per issue
   projects/<slug>.md   project pages; <slug>.html is the illustrated plan
@@ -27,7 +28,9 @@ the hub, prefix and tracked repos.
 
 ## Before any work
 
-Read `ROADMAP.md`. It says which branch is the mainline, what is in flight,
+Read the hub's `HUB.md`. It holds the rules this hub adds on top of this
+skill (things never to do, commit and branch names, how releases work), and
+they win where they differ. Then read `ROADMAP.md`. It says which branch is the mainline, what is in flight,
 what is parked on purpose and what to do next. Trust it over your own survey
 of git, but check the date on each section; if a fact is stale, fix the
 roadmap as part of your work.
@@ -50,10 +53,18 @@ code before acting on what a page says.
      how the issue is judged done.
    - Cause, Fix, Acceptance. Acceptance is checks someone else can run.
    - Status starts at Backlog unless work starts now.
+   - **Kind** is exactly one of the hub's kinds (`issue-hub where` lists
+     them; by default Bug, Feature, Improvement, Task). It can change later
+     as you learn more.
+   - **Labels** come only from the lists in `hub.json`: at least one `area`,
+     plus a `platform` or `focus` label only when the issue is about it. If
+     nothing fits, say so to the user rather than inventing a label.
 3. Add the issue's line under its status in `README.md`'s Issues Overview.
 4. If it belongs to a project, link it from the project page's Issues list
    and from the issue's Relationships.
-5. Commit in the hub repo: `git -C <hub> add issues/<P>-<n>.md README.md ...`.
+5. Run `issue-hub lint`. It lists open issues missing a Kind or an area, or
+   using a label that isn't in `hub.json`; fix your own before committing.
+6. Commit in the hub repo: `git -C <hub> add issues/<P>-<n>.md README.md ...`.
    `git show --stat` must list the issue file as added, not modified; if it
    says modified, someone else holds that number. Stop and reserve again.
 
@@ -110,14 +121,19 @@ Several sessions may edit the hub at once.
 ## The board
 
 `issue-hub board` serves the hub at http://127.0.0.1:8787: columns by
-status, project and label filters, every page rendered. Dragging a card or
+status, Kind, project and label filters, every page rendered, with each
+issue's Kind as a colored badge. Dragging a card or
 adding a comment rewrites exactly one line and refuses the write if the file
 changed on disk since it loaded. Standard-library Python, nothing to install.
 
 ## Set up a new hub
 
 `issue-hub init <path> --prefix ABC --name "<Project>" --repo <code repo>`
-creates the folders, `hub.json`, README, ROADMAP, templates and the ledger,
-runs `git init`, and prints the lines to add to the code repo's AGENTS.md or
-CLAUDE.md. Pass `--repo` once per code repo whose commits and branches carry
-issue numbers. Commit the new hub.
+creates the folders, `hub.json`, `HUB.md`, README, ROADMAP, templates and the
+ledger, runs `git init`, and prints the lines to add to the code repo's
+AGENTS.md or CLAUDE.md. Pass `--repo` once per code repo whose commits and
+branches carry issue numbers. Then, with the user, fill in `hub.json`'s
+`labels` (`area` first) and the house rules in `HUB.md`, and commit the hub.
+
+A hub adopting kinds and labels midway can set `"lint_from": <n>` in
+`hub.json` so `lint` only checks issues from that number on.

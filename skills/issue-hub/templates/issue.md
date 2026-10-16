@@ -2,12 +2,13 @@
 
 ## Metadata
 - **Status:** Backlog
+- **Kind:** <Bug | Feature | Improvement | Task>
 - **Priority:** Medium (3)
 - **Assignee:** None
 - **Estimate:** Small
 - **Due Date:** N/A
 - **Project:** None
-- **Labels:** None
+- **Labels:** <at least one area from hub.json, plus any platform or focus labels>
 
 ## Description
 

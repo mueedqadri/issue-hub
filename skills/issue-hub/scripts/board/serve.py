@@ -59,6 +59,14 @@ def invalidate() -> None:
         _cache["signature"] = None
 
 
+def hub_kinds() -> list[str]:
+    try:
+        kinds = json.loads((HUB / "hub.json").read_text()).get("kinds")
+    except (OSError, ValueError):
+        kinds = None
+    return kinds or ["Bug", "Feature", "Improvement", "Task"]
+
+
 def board_payload() -> dict:
     data = hub()
     counts: dict[str, dict[str, int]] = {}
@@ -105,6 +113,7 @@ def board_payload() -> dict:
         "projects": sorted(projects, key=lambda p: (-p["latest"], p["name"].lower())),
         "docs": [{"slug": doc.slug, "name": doc.name} for doc in data.docs.values()],
         "labels": data.labels(),
+        "kinds": hub_kinds(),
         "statuses": hubparse.STATUSES,
         "openStatuses": hubparse.OPEN_STATUSES,
         "priorities": hubparse.PRIORITIES,

@@ -14,8 +14,9 @@ and `documents/` when they change on disk, so the board is never stale.
 ## What it shows
 
 - **Board**: six columns (Backlog, Todo, In Progress, In Review, Done,
-  Canceled). Done and Canceled start folded. Search with `/`. Project and
-  label filters are searchable multi-selects.
+  Canceled). Done and Canceled start folded. Search with `/`. Kind, project
+  and label filters are searchable multi-selects, and each card shows its
+  Kind as a colored badge.
 - **Projects**: one card per project with live issue counts, newest first.
   The issue list is derived from the issue files. A `projects/<slug>.html`
   plan opens from the header.

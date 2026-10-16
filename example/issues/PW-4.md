@@ -2,12 +2,13 @@
 
 ## Metadata
 - **Status:** Todo
+- **Kind:** Bug
 - **Priority:** Medium (3)
 - **Assignee:** None
 - **Estimate:** Small
 - **Due Date:** N/A
 - **Project:** None
-- **Labels:** Radar, Bug
+- **Labels:** Radar, iOS
 
 ## Description
 

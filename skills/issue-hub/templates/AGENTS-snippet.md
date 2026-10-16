@@ -1,13 +1,7 @@
-## Issue tracking and commits
+## Issue tracking
 
-Issues are local markdown in `{{HUB}}` (its own git repo).
-`{{PREFIX}}-<n>` refers there. Its `ROADMAP.md` is the state of the project;
-read it before re-surveying git. Use the `issue-hub` skill to file issues,
-move status, link commits and start projects.
-
-- One issue per logical change. Subject `{{PREFIX}}-<n>: <imperative summary>`,
-  at most 72 characters. The body says what changed and why.
-- Branches: `<your-name>/{{prefix}}-<n>-<slug>`.
-- After committing, add the short hash and subject under the issue's
-  `## Comments` and keep its status current. Hub changes are committed in the
-  hub repo, never here.
+Issues are markdown in `{{HUB}}` (its own git repo, prefix `{{PREFIX}}`).
+`{{PREFIX}}-<n>` refers there. Use the `issue-hub` skill to file issues, move
+status, link commits and start projects, and read the hub's `HUB.md` for its
+house rules first. Its `ROADMAP.md` is the state of the project. Hub changes
+are committed in the hub repo, never here.

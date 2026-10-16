@@ -30,6 +30,12 @@ plain files:
 - **Projects with an illustrated plan.** Each project has a page with a
   shared contract (how done is judged, how it's checked, the order) and a
   one-page HTML plan.
+- **Kinds and labels per hub.** Every issue has one Kind (Bug, Feature,
+  Improvement or Task by default) and labels from lists the hub keeps in
+  `hub.json`, such as its areas. `issue-hub lint` catches anything off-list.
+- **House rules travel with the hub.** Each hub's `HUB.md` holds the rules
+  only that project has, so a code repo needs no skill of its own: just the
+  few lines `init` prints for its AGENTS.md.
 - **A local board.** `issue-hub board` serves a kanban view over the files.
   Drag to change status; every write is one line and refuses to overwrite a
   concurrent edit.
@@ -64,8 +70,9 @@ Requires Python 3.10+ and git. macOS and Linux (`fcntl` locking).
 
 ## Try the example
 
-[`example/`](./example) is a small hub for a made-up weather app: a roadmap,
-one project with its plan, five issues across every status.
+[`example/`](./example) is a small hub for a made-up weather app: house rules,
+kinds and labels, a roadmap, one project with its plan, and five issues across
+every status.
 
 ```sh
 skills/issue-hub/scripts/issue-hub --hub example board
@@ -80,7 +87,8 @@ skills/issue-hub/scripts/issue-hub --hub example board
 | `next` | show the next number without reserving |
 | `check <n>` | show every place a number is used |
 | `list [-n N]` | recent reservations |
-| `where` | the hub, prefix and tracked repos |
+| `where` | the hub, prefix, tracked repos, kinds and labels |
+| `lint [--all]` | open issues (or all) missing a Kind or area, or with unknown labels |
 | `board [--port N] [--no-open]` | serve the board |
 
 The hub is found from `--hub`, then `$ISSUE_HUB`, then the nearest parent

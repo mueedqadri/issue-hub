@@ -61,6 +61,7 @@ class Issue:
     num: int
     title: str
     status: str
+    kind: str
     priority: str
     priority_num: int
     labels: list[str]
@@ -79,6 +80,7 @@ class Issue:
             "num": self.num,
             "title": self.title,
             "status": self.status,
+            "kind": self.kind,
             "priority": self.priority,
             "priorityNum": self.priority_num,
             "labels": self.labels,
@@ -258,6 +260,7 @@ def load_hub(root: Path) -> Hub:
             num=int(issue_id.rsplit("-", 1)[1]),
             title=display or issue_id,
             status=normalize_status(meta.get("Status", "Backlog")),
+            kind="" if meta.get("Kind", "").strip() in ("", "None") else meta.get("Kind", "").strip(),
             priority=priority,
             priority_num=priority_num,
             labels=labels,

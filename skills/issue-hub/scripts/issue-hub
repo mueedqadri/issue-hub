@@ -8,6 +8,7 @@
     issue-hub check 12                                          # every place ABC-12 appears
     issue-hub list                                              # recent reservations
     issue-hub where                                             # the hub this command resolves to
+    issue-hub lint                                              # open issues missing a Kind or area
     issue-hub board                                             # browse and edit it in a browser
 
 The hub is found from `--hub`, then `$ISSUE_HUB`, then the nearest parent of
@@ -18,6 +19,11 @@ ledger, or a commit message or branch name in the hub or any repo listed in
 `hub.json`. `reserve` holds an exclusive lock on the ledger while it scans
 those places and appends the new numbers, so two sessions filing at once can
 never get the same one.
+
+`hub.json` can also list the hub's kinds and labels. `lint` checks open issues
+(numbered from `lint_from`, if set) against them: one Kind from `kinds`, at
+least one label from the `area` group when it has entries, and no label that
+is in no group.
 """
 
 from __future__ import annotations
@@ -37,6 +43,9 @@ TEMPLATES = SKILL / "templates"
 LEDGER_NAME = "reservations.tsv"
 LEDGER_HEADER = "number\treserved_at\ttitle\tcwd\n"
 PREFIX_RE = re.compile(r"^[A-Z][A-Z0-9]*$")
+DEFAULT_KINDS = ["Bug", "Feature", "Improvement", "Task"]
+CLOSED = ("Done", "Canceled")
+META_RE = re.compile(r"^- \*\*(?P<key>[^*]+):\*\*\s*(?P<value>.*)$")
 
 
 class Hub:
@@ -45,6 +54,9 @@ class Hub:
         config = json.loads((root / "hub.json").read_text())
         self.prefix = config["prefix"]
         self.repos = [Path(r).expanduser() for r in config.get("repos", [])]
+        self.kinds = config.get("kinds") or DEFAULT_KINDS
+        self.labels = config.get("labels") or {}
+        self.lint_from = int(config.get("lint_from") or 0)
         self.ledger = root / LEDGER_NAME
         self.number_re = re.compile(rf"\b{re.escape(self.prefix)}-(\d+)\b", re.IGNORECASE)
 
@@ -155,6 +167,56 @@ def check(hub: Hub, number: int) -> None:
         print(f"{hub.prefix}-{number} is free (highest in use is {hub.prefix}-{highest(sources)})")
 
 
+def metadata(path: Path) -> dict[str, str]:
+    meta, inside = {}, False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip() == "## Metadata":
+            inside = True
+            continue
+        if inside and line.startswith("## "):
+            break
+        match = META_RE.match(line) if inside else None
+        if match:
+            meta[match.group("key").strip()] = match.group("value").strip()
+    return meta
+
+
+def lint(hub: Hub, include_closed: bool) -> int:
+    known = {label for group in hub.labels.values() for label in group}
+    areas = set(hub.labels.get("area", []))
+    checked = 0
+    problems: list[str] = []
+    for path in sorted((hub.root / "issues").glob(f"{hub.prefix}-*.md"), key=lambda p: int(p.stem.rsplit("-", 1)[1])):
+        number = int(path.stem.rsplit("-", 1)[1])
+        meta = metadata(path)
+        status = meta.get("Status", "Backlog").split(" (")[0]
+        if number < hub.lint_from or (status in CLOSED and not include_closed):
+            continue
+        checked += 1
+        issues = []
+        kind = meta.get("Kind", "")
+        if kind in ("", "None"):
+            issues.append("no Kind")
+        elif kind not in hub.kinds:
+            issues.append(f"Kind {kind!r} is not one of {', '.join(hub.kinds)}")
+        raw = meta.get("Labels", "None")
+        labels = [] if raw in ("", "None") else [l.strip() for l in raw.split(",") if l.strip()]
+        if areas and not areas.intersection(labels):
+            issues.append("no area label")
+        if known:
+            unknown = [l for l in labels if l not in known]
+            if unknown:
+                issues.append("unknown label " + ", ".join(repr(l) for l in unknown))
+        if issues:
+            problems.append(f"{path.stem}: {'; '.join(issues)}")
+    for problem in problems:
+        print(problem)
+    scope = "issues" if include_closed else "open issues"
+    start = f" from {hub.prefix}-{hub.lint_from}" if hub.lint_from else ""
+    print(f"{checked} {scope}{start} checked; {len(problems)} need attention.")
+    return 1 if problems else 0
+
+
 def init(root: Path, prefix: str, name: str, repos: list[Path]) -> None:
     root = root.expanduser().resolve()
     if (root / "hub.json").exists():
@@ -164,7 +226,13 @@ def init(root: Path, prefix: str, name: str, repos: list[Path]) -> None:
     for folder in ("issues", "projects", "documents"):
         (root / folder).mkdir(parents=True, exist_ok=True)
 
-    config = {"name": name, "prefix": prefix, "repos": [str(r.expanduser().resolve()) for r in repos]}
+    config = {
+        "name": name,
+        "prefix": prefix,
+        "repos": [str(r.expanduser().resolve()) for r in repos],
+        "kinds": DEFAULT_KINDS,
+        "labels": {"area": [], "platform": []},
+    }
     (root / "hub.json").write_text(json.dumps(config, indent=2) + "\n")
     (root / LEDGER_NAME).write_text(LEDGER_HEADER)
     values = {
@@ -177,6 +245,7 @@ def init(root: Path, prefix: str, name: str, repos: list[Path]) -> None:
     for template, target in (
         ("README.md", "README.md"),
         ("ROADMAP.md", "ROADMAP.md"),
+        ("HUB.md", "HUB.md"),
         ("issue.md", "templates/issue.md"),
         ("project.md", "templates/project.md"),
     ):
@@ -232,6 +301,9 @@ def main() -> None:
 
     commands.add_parser("where", help="print the hub directory and its settings")
 
+    lint_parser = commands.add_parser("lint", help="list open issues missing a Kind or area, or with unknown labels")
+    lint_parser.add_argument("--all", action="store_true", help="check closed issues too")
+
     board_parser = commands.add_parser("board", help="serve the hub as a board in the browser")
     board_parser.add_argument("--port", type=int, default=8787)
     board_parser.add_argument("--no-open", action="store_true")
@@ -263,6 +335,13 @@ def main() -> None:
         print(f"hub     {hub.root}\nprefix  {hub.prefix}-")
         for repo in hub.repos:
             print(f"repo    {repo}{'' if (repo / '.git').exists() else '  (missing)'}")
+        print(f"kinds   {', '.join(hub.kinds)}")
+        for group, labels in hub.labels.items():
+            print(f"{group:<7} {', '.join(labels) if labels else '(none listed)'}")
+        rules = hub.root / "HUB.md"
+        print(f"rules   {rules if rules.exists() else '(no HUB.md)'}")
+    elif args.command == "lint":
+        sys.exit(lint(hub, args.all))
     elif args.command == "board":
         serve = Path(__file__).resolve().parent / "board" / "serve.py"
         command = [sys.executable, str(serve), "--hub", str(hub.root), "--port", str(args.port)]

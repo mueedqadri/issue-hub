@@ -2,6 +2,7 @@
 
 ## Metadata
 - **Status:** Backlog
+- **Kind:** Improvement
 - **Priority:** Low (4)
 - **Assignee:** None
 - **Estimate:** Small
