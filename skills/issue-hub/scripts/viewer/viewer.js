@@ -387,6 +387,7 @@ function progressBar(p) {
 }
 
 function docChip(d, opts = {}) {
+  if (d.type === 'artifact' && d.dead) return `<span class="doc dead" title="This published page is gone"><span class="ext art">ART</span><span class="nm">${esc(d.name === 'artifact' ? 'Published page' : d.name)} · gone</span></span>`;
   if (d.type === 'artifact') return `<a class="doc" href="${esc(d.href)}" target="_blank" rel="noreferrer"><span class="ext art">ART</span><span class="nm">${esc(d.name === 'artifact' ? 'Published page' : d.name)}</span></a>`;
   if (d.type === 'project') return `<a class="doc" href="#/project/${encodeURIComponent(d.slug)}">${folderIcon}<span class="nm">${esc(d.name || d.slug)}</span></a>`;
   if (d.type === 'doc') return `<button class="doc" data-open="doc:${esc(d.slug)}"><span class="ext md">DOC</span><span class="nm">${esc(d.name || d.slug)}</span></button>`;

@@ -74,6 +74,9 @@ def main() -> int:
         check("documents exported", (out / "data" / "docs" / "offline-usage-interviews.json").exists())
         check("ROADMAP page exported", (out / "data" / "pages" / "ROADMAP.md.json").exists())
 
+        links = hubexport._links("[a](https://claude.ai/artifact/x) (dead link, checked 2026-10-16) [b](https://claude.ai/artifact/y)", "issues")
+        check("dead published links are flagged", links[0].get("dead") is True and "dead" not in links[1], str(links))
+
         again = hubexport.export(HUB, out)
         check("an unchanged hub rewrites nothing", again["changed"] == 0, str(again))
 

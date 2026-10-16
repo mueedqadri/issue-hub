@@ -199,6 +199,7 @@ nav{flex:1;overflow-y:auto;min-height:0;padding-bottom:12px}
 .doc .ext.html{background:var(--teal)}.doc .ext.png,.doc .ext.jpg,.doc .ext.gif,.doc .ext.svg,.doc .ext.webp{background:var(--violet)}
 .doc .ext.md{background:var(--accent)}.doc .ext.art{background:var(--amber)}.doc .ext.pdf{background:var(--red)}
 .doc span.nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.doc.dead{opacity:.55;cursor:default}.doc.dead:hover{background:var(--surface);border-color:var(--line)}.doc.dead .nm{text-decoration:line-through}
 .doc.plan{border-color:var(--accent)}
 .more-files summary{cursor:pointer;color:var(--muted);font-size:12px;margin:8px 0 6px;width:max-content}
 .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;margin-top:6px}

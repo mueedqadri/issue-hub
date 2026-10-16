@@ -88,7 +88,8 @@ def _links(markdown: str, context: str) -> list[dict]:
         if href.startswith(("http://", "https://")):
             if "claude.ai/" in href and href not in seen:
                 seen.add(href)
-                out.append({"type": "artifact", "name": text or "Artifact", "href": href})
+                dead = markdown[match.end():match.end() + 16].lstrip().startswith("(dead link")
+                out.append({"type": "artifact", "name": text or "Artifact", "href": href, **({"dead": True} if dead else {})})
             continue
         path = posixpath.normpath(posixpath.join(context, href.split("#")[0])).lstrip("./")
         if path in seen:
