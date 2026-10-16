@@ -1,16 +1,18 @@
-"""Export the hub as a static, read-only site for the viewer.
+"""Export hubs as a static, read-only site for the viewer.
 
-    out/index.html, viewer.js, viewer.css   the viewer, copied from ../viewer
-    out/data/index.json                     every card, project and document
-    out/data/issues/<ID>.json               one issue's page, links and relations
-    out/data/projects/<slug>.json           one project's page
-    out/data/docs/<slug>.json               one document's page
+    out/index.html                          hub picker; opens the last hub used
+    out/hubs.json                           every hub: slug, name, prefix, counts
+    out/<hub>/index.html, viewer.js, ...    the viewer, copied from ../viewer
+    out/<hub>/data/index.json               every card, project and document
+    out/<hub>/data/issues/<ID>.json         one issue's page, links and relations
+    out/<hub>/data/projects/<slug>.json     one project's page
+    out/<hub>/data/docs/<slug>.json         one document's page
 
 The markdown stays the source; this is a cache to rebuild after every pull.
 Files whose content is unchanged are not rewritten, so a static server's
 Last-Modified stays put and browsers revalidate for free. Raw hub files
 (illustrated plans, images, documents) are linked as `hub/<path>`; whatever
-serves the export serves the hub checkout there.
+serves the export serves each hub's checkout at `<hub>/hub/`.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import json
 import posixpath
+import shutil
 import re
 import subprocess
 import time
@@ -28,6 +31,7 @@ import render as hubrender
 
 VIEWER = Path(__file__).resolve().parent.parent / "viewer"
 VIEWER_FILES = ("index.html", "viewer.js", "viewer.css")
+PICKER = "hubs.html"
 
 ID_RE = re.compile(r"\b[A-Z][A-Z0-9]*-\d+\b")
 SECTION_RE = re.compile(r"^#{2,3}\s+(?P<name>.+?)\s*$")
@@ -305,3 +309,47 @@ def export(root: Path, out: Path) -> dict:
     changed += _write(out / "data" / "index.json", json.dumps(index, separators=(",", ":")))
     return {"issues": len(cards), "projects": len(projects), "docs": len(hub.docs), "changed": changed, "removed": removed}
 
+
+
+def hub_slug(root: Path) -> str:
+    config = _hub_config(Path(root))
+    return hubparse.slugify(config.get("name") or "") or hubparse.slugify(Path(root).resolve().name) or "hub"
+
+
+def slugs(roots: list[Path]) -> dict[str, Path]:
+    """One URL-safe name per hub, from its hub.json name; duplicates get a number."""
+    out: dict[str, Path] = {}
+    for root in roots:
+        base = hub_slug(root)
+        slug, n = base, 2
+        while slug in out:
+            slug, n = f"{base}-{n}", n + 1
+        out[slug] = Path(root).resolve()
+    return out
+
+
+def export_all(roots: list[Path], out: Path) -> dict:
+    """Export every hub into out/<slug>/, plus the picker and hubs.json."""
+    out = Path(out).resolve()
+    hubs = slugs(roots)
+    totals = {"hubs": len(hubs), "issues": 0, "projects": 0, "changed": 0, "removed": 0}
+    listing = []
+    for slug, root in hubs.items():
+        counts = export(root, out / slug)
+        for key in ("issues", "projects", "changed", "removed"):
+            totals[key] += counts[key]
+        index = json.loads((out / slug / "data" / "index.json").read_text())
+        open_statuses = set(index["openStatuses"])
+        listing.append({
+            "slug": slug, "name": index["name"], "prefix": index["prefix"],
+            "open": sum(1 for i in index["issues"] if i["status"] in open_statuses),
+            "total": len(index["issues"]),
+            "updated": max((i["updated"] for i in index["issues"]), default=0),
+        })
+    for stale in out.iterdir() if out.exists() else ():
+        if stale.is_dir() and stale.name not in hubs and (stale / "data" / "index.json").exists():
+            shutil.rmtree(stale)
+            totals["removed"] += 1
+    totals["changed"] += _write(out / "hubs.json", json.dumps(listing, separators=(",", ":")))
+    totals["changed"] += _write(out / "index.html", (VIEWER / PICKER).read_text(encoding="utf-8"))
+    return totals

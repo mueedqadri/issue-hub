@@ -155,9 +155,12 @@ changed on disk since it loaded. Standard-library Python, nothing to install.
 built like Linear: a list grouped by status or a board, ⌘K to jump anywhere,
 `j`/`k` to move, filter chips, links you can share, and an issue panel that
 shows its project, the project's plan and documents, related issues and the
-issue's files. `issue-hub export <dir>` writes the same viewer as a static
-site (JSON plus pre-rendered pages) for any web server; serve the hub
-checkout at `<site>/hub/`, without dotfiles.
+issue's files. Pass more hubs to switch between them
+(`issue-hub view ~/notes/other-app-hub`; `g` then `h` in the viewer).
+`issue-hub export <dir> [hub ...]` writes the same viewer as a static site
+(JSON plus pre-rendered pages, one folder per hub) for any web server; serve
+each hub's checkout at `<site>/<hub>/hub/`, without dotfiles. The repo's
+`deploy/` folder runs it as a container that pulls the hubs from git.
 
 ## Set up a new hub
 

@@ -1,6 +1,6 @@
 {
   "name": "issue-hub",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A local markdown issue hub that many agent sessions share safely: collision-free issue numbers, a roadmap that holds the project's state, commit-to-issue links, illustrated project plans, a local board, and a fast read-only viewer.",
   "author": {
     "name": "Mueed Qadri"

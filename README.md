@@ -44,8 +44,9 @@ plain files:
   concurrent edit.
 - **A fast read-only viewer.** `issue-hub view` is a Linear-style list and
   board with ⌘K, keyboard navigation and an issue panel that shows the
-  project's plan and documents. `issue-hub export` writes it as a static
-  site to host anywhere, such as a home server.
+  project's plan and documents. It switches between the hubs of all your
+  projects, and [`deploy/`](./deploy) runs it on a server that pulls the
+  hubs from git.
 
 The hub is its own git repo, separate from the code, so issue churn never
 touches your code history.
@@ -74,6 +75,19 @@ code repo's `AGENTS.md` or `CLAUDE.md` so every session knows where the hub
 is. Then ask your agent to "file an issue for …" or "start a project for …".
 
 Requires Python 3.10+ and git. macOS and Linux (`fcntl` locking).
+
+## Several projects
+
+Give each project its own hub: its own prefix, kinds, labels and house
+rules. The viewer shows them side by side:
+
+```sh
+issue-hub --hub ~/notes/myapp-hub view ~/notes/other-hub ~/notes/side-project-hub
+```
+
+`/` opens the hub you used last; switch with the name at the top left, ⌘K,
+or `g` then `h`. To keep the viewer running on a home server or VPS, see
+[`deploy/`](./deploy).
 
 ## Try the example
 

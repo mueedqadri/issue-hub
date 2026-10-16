@@ -12,6 +12,9 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
 };
 const KEY = 'issue-viewer:' + location.pathname.replace(/[^/]*$/, '');
+const THEME_KEY = 'issue-hub-theme';
+const HUB_SLUG = decodeURIComponent(location.pathname.replace(/\/[^/]*$/, '').split('/').pop() || '');
+let HUBS = [];
 const ID_RE = /\b([A-Z][A-Z0-9]*-\d+)\b/g;
 const now = () => performance.now();
 const timings = (window.__viewerTimings = []);
@@ -706,6 +709,8 @@ function commands() {
   ];
   for (const key of D.pages || []) cmds.push({ t: key === 'ROADMAP.md' ? 'Open the roadmap' : key === 'HUB.md' ? 'Open the house rules' : `Open ${key}`, hint: '', run: () => openTarget('page:' + key) });
   for (const g of Object.keys(GROUPS)) cmds.push({ t: `Group by ${GROUPS[g].toLowerCase()}`, hint: '', run: () => go({ group: g }) });
+  for (const h of HUBS) if (h.slug !== HUB_SLUG) cmds.push({ t: `Switch to ${h.name}`, hint: h.prefix ? `${h.prefix}-` : '', run: () => switchHub(h.slug) });
+  if (HUBS.length > 1) cmds.push({ t: 'Show all hubs', hint: 'g h', run: () => openHubs() });
   return cmds;
 }
 
@@ -827,7 +832,7 @@ function renderFilterOpts() {
 }
 
 function highlightPop() {
-  const opts = $('#pop-opts');
+  const opts = $('#pop-opts') || $('#popover .opts');
   if (!opts) return;
   opts.querySelectorAll('.opt.on').forEach(el => el.classList.remove('on'));
   const el = opts.querySelector(`[data-n="${popAt}"]`);
@@ -837,6 +842,7 @@ function highlightPop() {
 
 function toggleFilter(o) {
   if (!o) return;
+  if (o.hub) return switchHub(o.hub);
   const values = S.f[o.field].includes(o.value) ? S.f[o.field].filter(v => v !== o.value) : [...S.f[o.field], o.value];
   go({ f: { ...S.f, [o.field]: values } }, { replace: true });
   if (!$('#popover').hidden) renderFilterOpts();
@@ -857,13 +863,45 @@ function openDisplay() {
   $('#d-order').addEventListener('change', e => go({ order: e.target.value }));
 }
 
+// ---------------------------------------------------------------- hubs
+
+async function loadHubs() {
+  if (HUB_SLUG) store.set('issue-hub:last', HUB_SLUG);
+  try {
+    const res = await fetch('../hubs.json', { cache: 'no-cache' });
+    if (!res.ok) return;
+    const list = await res.json();
+    if (!Array.isArray(list)) return;
+    HUBS = list;
+  } catch { return; }
+  const btn = $('#hub-switch');
+  btn.classList.toggle('many', HUBS.length > 1);
+  btn.disabled = HUBS.length < 2;
+  btn.title = HUBS.length > 1 ? 'Switch hub (g h)' : '';
+}
+
+function switchHub(slug) {
+  store.set('issue-hub:last', slug);
+  location.href = `../${encodeURIComponent(slug)}/`;
+}
+
+function openHubs() {
+  const pop = $('#popover');
+  pop.innerHTML = `<div class="opts">${HUBS.map((h, n) => `<div class="opt hub-opt${h.slug === HUB_SLUG ? ' current' : ''}" data-hub="${esc(h.slug)}" data-n="${n}"><span class="hub-mark sm">${esc((h.name || '?').slice(0, 1).toUpperCase())}</span><span class="t">${esc(h.name)}</span><span class="n">${h.open} open</span></div>`).join('')}</div><a class="hub-all" href="../?pick">All hubs</a>`;
+  pop.hidden = false;
+  place(pop, $('#hub-switch'));
+  popItems = HUBS.map(h => ({ hub: h.slug }));
+  popAt = Math.max(0, HUBS.findIndex(h => h.slug === HUB_SLUG));
+  highlightPop();
+}
+
 // ---------------------------------------------------------------- misc actions
 
 function toggleTheme() {
   const root = document.documentElement;
   const current = root.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   root.dataset.theme = current === 'dark' ? 'light' : 'dark';
-  store.set('dashboard-theme', root.dataset.theme);
+  store.set(THEME_KEY, root.dataset.theme);
 }
 
 let toastTimer = 0;
@@ -926,7 +964,7 @@ function interceptLink(a, e) {
 function bind() {
   document.addEventListener('click', e => {
     const t = e.target;
-    if (!$('#popover').hidden && !t.closest('#popover') && !t.closest('#filter-btn') && !t.closest('#display-btn')) closePopover();
+    if (!$('#popover').hidden && !t.closest('#popover') && !t.closest('#filter-btn') && !t.closest('#display-btn') && !t.closest('#hub-switch')) closePopover();
     const open = t.closest('[data-open]');
     if (open) { e.preventDefault(); $('#app').classList.remove('nav-open'); handleOpenAttr(open); return; }
     const a = t.closest('a');
@@ -1021,6 +1059,7 @@ function bind() {
   $('#popover').addEventListener('click', e => { const it = e.target.closest('.opt'); if (it) toggleFilter(popItems[+it.dataset.n]); });
 
   $('#palette-open').addEventListener('click', openPalette);
+  $('#hub-switch').addEventListener('click', () => { if (HUBS.length > 1) ($('#popover').hidden ? openHubs() : closePopover()); });
   $('#help-open').addEventListener('click', () => { $('#help').hidden = false; });
   $('#theme-toggle').addEventListener('click', toggleTheme);
   $('#filter-btn').addEventListener('click', () => ($('#popover').hidden ? openFilter() : closePopover()));
@@ -1040,10 +1079,16 @@ function bind() {
     if (e.key === 'Escape' && !typing) { closeTop(); return; }
     if (typing || e.metaKey || e.ctrlKey || e.altKey || !D) return;
     if (!$('#palette').hidden) return;
+    if (!$('#popover').hidden && $('#popover .hub-opt')) {
+      if (e.key === 'ArrowDown' || e.key === 'j') { popAt = Math.min(popItems.length - 1, popAt + 1); highlightPop(); e.preventDefault(); return; }
+      if (e.key === 'ArrowUp' || e.key === 'k') { popAt = Math.max(0, popAt - 1); highlightPop(); e.preventDefault(); return; }
+      if (e.key === 'Enter') { toggleFilter(popItems[popAt]); e.preventDefault(); return; }
+    }
     if (gPending) {
       clearTimeout(gPending); gPending = 0;
       const view = { a: 'active', b: 'backlog', l: 'all', d: 'done', p: 'projects' }[e.key];
       if (view) { e.preventDefault(); goView(view); }
+      else if (e.key === 'h' && HUBS.length > 1) { e.preventDefault(); openHubs(); }
       return;
     }
     const keys = {
@@ -1072,6 +1117,7 @@ function start() {
   }
   if (!D) $('#content').innerHTML = '<div class="empty">Loading…</div>';
   refresh();
+  loadHubs();
   setInterval(refresh, 60000);
   setInterval(freshness, 30000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });

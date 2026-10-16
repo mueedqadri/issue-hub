@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Issues</title>
-<script>try{const t=localStorage.getItem('dashboard-theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch{}</script>
+<script>try{const t=localStorage.getItem('issue-hub-theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch{}</script>
 <link rel="stylesheet" href="viewer.css">
 <script src="viewer.js" defer></script>
 </head>
@@ -12,8 +12,7 @@
 <div class="app" id="app">
   <aside class="sidebar" id="sidebar">
     <div class="side-head">
-      <span class="hub-mark" id="hub-mark"></span>
-      <strong class="hub-name" id="hub-name">Issues</strong>
+      <button class="hub-switch" id="hub-switch" disabled aria-label="Switch hub"><span class="hub-mark" id="hub-mark"></span><strong class="hub-name" id="hub-name">Issues</strong><svg class="chev" viewBox="0 0 12 12"><path d="m3 4.5 3 3 3-3"/></svg></button>
       <button class="icon-btn" id="palette-open" title="Search and commands (⌘K)" aria-label="Search and commands"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg></button>
     </div>
     <nav id="nav" aria-label="Views"></nav>
@@ -79,6 +78,7 @@
       <dt><kbd>esc</kbd></dt><dd>Close</dd>
       <dt><kbd>b</kbd></dt><dd>Switch list and board</dd>
       <dt><kbd>g</kbd> then <kbd>a</kbd> <kbd>b</kbd> <kbd>l</kbd> <kbd>d</kbd> <kbd>p</kbd></dt><dd>Active, Backlog, All, Done, Projects</dd>
+      <dt><kbd>g</kbd> then <kbd>h</kbd></dt><dd>Switch hub</dd>
       <dt><kbd>p</kbd></dt><dd>Open the issue's project plan</dd>
       <dt><kbd>c</kbd></dt><dd>Copy a link to the issue</dd>
       <dt><kbd>x</kbd></dt><dd>Clear filters</dd>

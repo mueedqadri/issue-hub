@@ -308,13 +308,15 @@ def main() -> None:
     board_parser.add_argument("--port", type=int, default=8787)
     board_parser.add_argument("--no-open", action="store_true")
 
-    export_parser = commands.add_parser("export", help="write the hub as a static read-only site (JSON and pages)")
-    export_parser.add_argument("out", type=Path, help="output folder; serve the hub checkout at <site>/hub/")
+    export_parser = commands.add_parser("export", help="write hubs as a static read-only site (JSON and pages)")
+    export_parser.add_argument("out", type=Path, help="output folder; serve each hub's checkout at <site>/<hub>/hub/")
+    export_parser.add_argument("more", type=Path, nargs="*", metavar="HUB", help="more hubs to include, each with its own hub.json")
 
     view_parser = commands.add_parser("view", help="serve the read-only viewer, re-exporting on change")
+    view_parser.add_argument("more", type=Path, nargs="*", metavar="HUB", help="more hubs to switch between")
     view_parser.add_argument("--host", default="127.0.0.1")
     view_parser.add_argument("--port", type=int, default=8788)
-    view_parser.add_argument("--out", type=Path, help="export folder (default ~/.cache/issue-hub/<hub>)")
+    view_parser.add_argument("--out", type=Path, help="export folder (default ~/.cache/issue-hub/viewer)")
     view_parser.add_argument("--no-open", action="store_true")
 
     args = parser.parse_args()
@@ -360,12 +362,15 @@ def main() -> None:
     elif args.command == "export":
         sys.path.insert(0, str(Path(__file__).resolve().parent / "board"))
         import export as hubexport
-        counts = hubexport.export(hub.root, args.out)
-        print(f"{counts['issues']} issues, {counts['projects']} projects, {counts['docs']} documents; "
+        roots = [hub.root] + [find_hub(path.expanduser()).root for path in args.more]
+        counts = hubexport.export_all(roots, args.out)
+        print(f"{counts['hubs']} hub(s), {counts['issues']} issues, {counts['projects']} projects; "
               f"{counts['changed']} files written, {counts['removed']} removed")
     elif args.command == "view":
         view = Path(__file__).resolve().parent / "board" / "view.py"
         command = [sys.executable, str(view), "--hub", str(hub.root), "--host", args.host, "--port", str(args.port)]
+        for path in args.more:
+            command += ["--hub", str(find_hub(path.expanduser()).root)]
         if args.out:
             command += ["--out", str(args.out)]
         if args.no_open:

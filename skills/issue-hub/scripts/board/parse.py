@@ -212,6 +212,8 @@ def load_hub(root: Path) -> Hub:
     # Projects first — their titles are the index bare project names resolve against.
     name_index: dict[str, str] = {}
     for path in sorted((root / "projects").glob("*.md")):
+        if path.name.startswith("."):
+            continue
         text = path.read_text(encoding="utf-8")
         title, meta = _split_metadata(text)
         name = re.sub(r"^Project:\s*", "", title).strip()
@@ -228,6 +230,8 @@ def load_hub(root: Path) -> Hub:
         )
 
     for path in sorted((root / "documents").glob("*.md")):
+        if path.name.startswith("."):
+            continue
         text = path.read_text(encoding="utf-8")
         title, _ = _split_metadata(text)
         hub.docs[path.stem] = Doc(

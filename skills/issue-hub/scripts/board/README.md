@@ -49,23 +49,26 @@ The board does not create issues: numbers come from `issue-hub reserve`.
 ## The read-only viewer
 
 ```sh
-issue-hub view                 # live, re-exports when a file changes
-issue-hub export <dir>         # static site for any web server
+issue-hub view [hub ...]           # live, re-exports when a file changes
+issue-hub export <dir> [hub ...]   # static site for any web server
 ```
 
-`view` exports to `~/.cache/issue-hub/<hub>` and serves it at
-`http://127.0.0.1:8788` (`--host`, `--port`, `--out`, `--no-open`). The
-export holds `data/index.json` (every card, project and document, about
-60 KB compressed for 1,000 issues) and one pre-rendered JSON page per issue,
-project and document. Files whose content is unchanged are not rewritten.
-Whatever serves the export must also serve the hub checkout at `hub/`,
-refusing dotfiles, for plans, images and documents.
+`view` exports to `~/.cache/issue-hub/viewer` and serves it at
+`http://127.0.0.1:8788` (`--host`, `--port`, `--out`, `--no-open`). Each hub
+gets a folder named after its `hub.json` name, such as `/my-app/`; `/` is a
+picker that opens the hub used last, and `hubs.json` lists them for the
+viewer's switcher. A hub's folder holds `data/index.json` (every card,
+project and document, about 60 KB compressed for 1,000 issues) and one
+pre-rendered JSON page per issue, project and document. Files whose content
+is unchanged are not rewritten. Whatever serves the export must also serve
+each hub's checkout at `<hub>/hub/`, refusing dotfiles, for plans, images
+and documents. [`deploy/`](../../../../deploy) runs all of this in a container.
 
 The viewer keeps the index in memory and in the browser, so it draws from
 the last copy at once and checks for a newer one in the background. Filters,
 search and grouping run in the browser. Keys: ⌘K, `/`, `f`, `j`/`k`, Enter,
 Esc, `b`, `g` then `a`/`b`/`l`/`d`/`p`, `p` for the project plan, `c` to copy
-a link, `?` for the list. Colors follow the theme in `dashboard-theme`.
+a link, `g` then `h` to switch hubs, `?` for the list. The theme choice is kept in `issue-hub-theme`.
 
 ## Files
 
@@ -77,7 +80,7 @@ a link, `?` for the list. Colors follow the theme in `dashboard-theme`.
 | `ui.html` | the whole UI: inline CSS and vanilla JS |
 | `export.py` | hub → static viewer site (JSON and pre-rendered pages) |
 | `view.py` | serves an export and the hub's files, read-only |
-| `../viewer/` | the read-only viewer: `index.html`, `viewer.css`, `viewer.js` |
+| `../viewer/` | the read-only viewer: `index.html`, `viewer.css`, `viewer.js`, and the `hubs.html` picker |
 
 `render.py` is a deliberate subset of markdown: headings, paragraphs,
 emphasis, code, nested lists, blockquotes, tables, rules, links and images.

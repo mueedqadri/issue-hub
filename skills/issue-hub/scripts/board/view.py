@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Serve the read-only viewer for a hub.
+"""Serve the read-only viewer for one or more hubs.
 
-    python3 board/view.py --hub <hub> [--out DIR] [--host 127.0.0.1] [--port 8788]
+    python3 board/view.py --hub <hub> [--hub <another>] [--out DIR] [--host 127.0.0.1] [--port 8788]
 
-Exports the hub to DIR (default ~/.cache/issue-hub/<hub name>), serves it,
-and re-exports when a hub file changes. Raw hub files are served under
-/hub/, never dotfiles or .git. Nothing here writes to the hub.
+Exports every hub to DIR/<hub> (default DIR ~/.cache/issue-hub/viewer),
+serves them, and re-exports when a hub file changes. `/` opens the hub used
+last, and the viewer switches between hubs. Each hub's raw files are served
+under /<hub>/hub/, never dotfiles or .git. Nothing here writes to a hub.
 """
 
 from __future__ import annotations
@@ -29,36 +30,43 @@ _state = {"signature": None, "checked": 0.0}
 _lock = threading.Lock()
 
 
-def signature(root: Path) -> tuple:
-    parts = [(root / "hub.json").stat().st_mtime if (root / "hub.json").exists() else 0]
-    parts += [(hubexport.VIEWER / name).stat().st_mtime_ns for name in hubexport.VIEWER_FILES]
-    for folder in ("issues", "projects", "documents"):
-        for entry in os.scandir(root / folder) if (root / folder).is_dir() else ():
-            if entry.is_file() and entry.name.endswith(".md"):
-                stat = entry.stat()
-                parts.append((entry.name, stat.st_mtime_ns, stat.st_size))
+def signature(roots: list[Path]) -> tuple:
+    parts: list = [(hubexport.VIEWER / name).stat().st_mtime_ns for name in (*hubexport.VIEWER_FILES, hubexport.PICKER)]
+    for root in roots:
+        parts.append((root / "hub.json").stat().st_mtime_ns if (root / "hub.json").exists() else 0)
+        for folder in ("issues", "projects", "documents"):
+            for entry in os.scandir(root / folder) if (root / folder).is_dir() else ():
+                if entry.is_file() and entry.name.endswith(".md"):
+                    stat = entry.stat()
+                    parts.append((folder, entry.name, stat.st_mtime_ns, stat.st_size))
     return tuple(parts)
 
 
-def refresh(root: Path, out: Path) -> None:
+def refresh(roots: list[Path], out: Path) -> None:
     """Re-export at most once a second, and only when a hub file changed."""
     with _lock:
         now = time.monotonic()
         if now - _state["checked"] < 1:
             return
         _state["checked"] = now
-        current = signature(root)
+        current = signature(roots)
         if current != _state["signature"]:
-            hubexport.export(root, out)
+            hubexport.export_all(roots, out)
             _state["signature"] = current
 
 
 class Handler(SimpleHTTPRequestHandler):
-    hub_root: Path
+    hubs: dict[str, Path]
     out: Path
 
     def log_message(self, fmt: str, *args) -> None:
         pass
+
+    def handle_one_request(self) -> None:
+        try:
+            super().handle_one_request()
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
 
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-cache")
@@ -66,42 +74,44 @@ class Handler(SimpleHTTPRequestHandler):
 
     def translate_path(self, path: str) -> str:
         route = unquote(urlparse(path).path)
-        if route.startswith("/hub/"):
-            relative = route[len("/hub/"):]
+        parts = route.lstrip("/").split("/", 2)
+        if len(parts) == 3 and parts[1] == "hub" and parts[0] in self.hubs:
+            root, relative = self.hubs[parts[0]], parts[2]
             if any(part.startswith(".") for part in relative.split("/")):
                 return str(self.out / ".missing")
-            target = (self.hub_root / relative).resolve()
-            if self.hub_root not in target.parents:
+            target = (root / relative).resolve()
+            if root not in target.parents:
                 return str(self.out / ".missing")
             return str(target)
         return super().translate_path(path)
 
     def do_GET(self) -> None:  # noqa: N802
-        if urlparse(self.path).path in ("/", "/index.html", "/data/index.json"):
-            refresh(self.hub_root, self.out)
+        route = urlparse(self.path).path
+        if route in ("/", "/index.html", "/hubs.json") or route.endswith(("/data/index.json", "/index.html")) or route.count("/") == 2 and route.endswith("/"):
+            refresh(list(self.hubs.values()), self.out)
         super().do_GET()
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--hub", type=Path, default=Path(os.environ.get("ISSUE_HUB", ".")))
+    parser.add_argument("--hub", type=Path, action="append", help="a hub directory; repeat for several (default: $ISSUE_HUB or .)")
     parser.add_argument("--out", type=Path)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8788)
     parser.add_argument("--no-open", action="store_true")
     args = parser.parse_args()
 
-    root = args.hub.expanduser().resolve()
-    out = (args.out or Path.home() / ".cache" / "issue-hub" / root.name).expanduser().resolve()
+    roots = [path.expanduser().resolve() for path in (args.hub or [Path(os.environ.get("ISSUE_HUB", "."))])]
+    out = (args.out or Path.home() / ".cache" / "issue-hub" / "viewer").expanduser().resolve()
     started = time.monotonic()
-    counts = hubexport.export(root, out)
-    _state["signature"] = signature(root)
-    print(f"exported {counts['issues']} issues, {counts['projects']} projects in {time.monotonic() - started:.1f}s to {out}")
+    counts = hubexport.export_all(roots, out)
+    _state["signature"] = signature(roots)
+    print(f"exported {counts['hubs']} hub(s), {counts['issues']} issues in {time.monotonic() - started:.1f}s to {out}", flush=True)
 
-    Handler.hub_root, Handler.out = root, out
+    Handler.hubs, Handler.out = hubexport.slugs(roots), out
     server = ThreadingHTTPServer((args.host, args.port), partial(Handler, directory=str(out)))
     url = f"http://{args.host}:{args.port}/"
-    print(f"viewer at {url}")
+    print(f"viewer at {url} ({', '.join(Handler.hubs)})", flush=True)
     if not args.no_open:
         threading.Timer(0.3, lambda: webbrowser.open(url)).start()
     try:

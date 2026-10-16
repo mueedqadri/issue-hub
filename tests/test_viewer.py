@@ -87,12 +87,32 @@ def main() -> int:
         gone = hubexport.export(copy, out)
         check("a deleted issue's page is removed", gone["removed"] == 1 and not (out / "data" / "issues" / "PW-5.json").exists(), str(gone))
 
-        print("serving the copy")
+        print("exporting several hubs")
+        check("hub names become unique slugs", list(hubexport.slugs([HUB, copy])) == ["pocket-weather", "pocket-weather-2"])
+        other = Path(tmp) / "other"
+        shutil.copytree(HUB, other)
+        config = json.loads((other / "hub.json").read_text())
+        config.update({"name": "Side Project", "prefix": "SP"})
+        (other / "hub.json").write_text(json.dumps(config))
+        site = Path(tmp) / "multi"
+        many = hubexport.export_all([copy, other], site)
+        hubs = json.loads((site / "hubs.json").read_text())
+        check("every hub is exported", many["hubs"] == 2 and [h["slug"] for h in hubs] == ["pocket-weather", "side-project"], str(hubs))
+        check("hubs.json counts open issues", hubs[0]["total"] == 4 and hubs[0]["open"] == 3, str(hubs[0]))
+        check("the picker sits at the root", "hubs.json" in (site / "index.html").read_text())
+        check("each hub gets its own viewer", (site / "side-project" / "data" / "index.json").exists())
+        shutil.rmtree(other)
+        dropped = hubexport.export_all([copy], site)
+        check("a hub that is no longer listed is removed", not (site / "side-project").exists() and dropped["removed"] >= 1, str(dropped))
+        shutil.copytree(HUB, other)
+        (other / "hub.json").write_text(json.dumps(config))
+
+        print("serving two hubs")
         (copy / ".git").mkdir(exist_ok=True)
         (copy / ".git" / "config").write_text("secret")
         (copy / ".env").write_text("secret")
         port = free_port()
-        server = subprocess.Popen([sys.executable, str(SCRIPTS / "board" / "view.py"), "--hub", str(copy), "--out", str(out),
+        server = subprocess.Popen([sys.executable, str(SCRIPTS / "board" / "view.py"), "--hub", str(copy), "--hub", str(other), "--out", str(site),
                                    "--port", str(port), "--no-open"], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         try:
             base = f"http://127.0.0.1:{port}"
@@ -103,7 +123,14 @@ def main() -> int:
                 except OSError:
                     time.sleep(0.1)
             status, body = fetch(base + "/")
-            check("serves the viewer", status == 200 and b"viewer.js" in body, str(status))
+            check("serves the hub picker", status == 200 and b"hubs.json" in body, str(status))
+            status, body = fetch(base + "/hubs.json")
+            check("lists both hubs", status == 200 and [h["slug"] for h in json.loads(body)] == ["pocket-weather", "side-project"])
+            status, body = fetch(base + "/side-project/")
+            check("serves each hub's viewer", status == 200 and b"viewer.js" in body, str(status))
+            status, body = fetch(base + "/side-project/data/index.json")
+            check("serves the second hub's index", status == 200 and json.loads(body)["prefix"] == "SP", str(status))
+            base += "/pocket-weather"
             status, body = fetch(base + "/data/index.json")
             check("serves the index", status == 200 and json.loads(body)["prefix"] == "PW", str(status))
             status, _ = fetch(base + "/hub/projects/offline-forecasts.html")
