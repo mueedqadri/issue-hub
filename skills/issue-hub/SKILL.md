@@ -145,22 +145,13 @@ Several sessions may edit the hub at once.
 
 ## The board
 
-`issue-hub board` serves the hub at http://127.0.0.1:8787: columns by
-status, Kind, project and label filters, every page rendered, with each
-issue's Kind as a colored badge. Dragging a card or
-adding a comment rewrites exactly one line and refuses the write if the file
-changed on disk since it loaded. Standard-library Python, nothing to install.
-
-`issue-hub view` serves a fast read-only viewer at http://127.0.0.1:8788,
-built like Linear: a list grouped by status or a board, ⌘K to jump anywhere,
-`j`/`k` to move, filter chips, links you can share, and an issue panel that
-shows its project, the project's plan and documents, related issues and the
-issue's files. Pass more hubs to switch between them
-(`issue-hub view ~/notes/other-app-hub`; `g` then `h` in the viewer).
-`issue-hub export <dir> [hub ...]` writes the same viewer as a static site
-(JSON plus pre-rendered pages, one folder per hub) for any web server; serve
-each hub's checkout at `<site>/<hub>/hub/`, without dotfiles. The repo's
-`deploy/` folder runs it as a container that pulls the hubs from git.
+People browse a hub with [issue-hub-board](https://github.com/mueedqadri/issue-hub-board),
+a separate web app: a Linear-style list and board with ⌘K, filters, and an
+issue panel that shows the project, its plan and documents, related issues
+and the issue's files. `issue-hub view [hub ...]` opens it read-only (more
+hubs to switch between), `issue-hub board` opens its editable kanban, and
+`issue-hub export <dir>` writes a static site. If it isn't installed, these
+commands print how to install it; agents don't need it to work on a hub.
 
 ## Set up a new hub
 

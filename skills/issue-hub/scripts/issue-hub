@@ -33,6 +33,7 @@ import fcntl
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from datetime import date, datetime
@@ -275,6 +276,24 @@ def parse_number(text: str) -> int:
     return int(tail)
 
 
+BOARD_MISSING = """issue-hub: the board and viewer are a separate app, issue-hub-board. Install it with
+
+    uv tool install git+https://github.com/mueedqadri/issue-hub-board
+
+(or pipx install git+https://github.com/mueedqadri/issue-hub-board), or set
+ISSUE_HUB_BOARD to the issue-hub-board script in a clone."""
+
+
+def board_command() -> list[str] | None:
+    """How to run issue-hub-board: $ISSUE_HUB_BOARD, else the one on PATH."""
+    explicit = os.environ.get("ISSUE_HUB_BOARD")
+    if explicit:
+        path = Path(explicit).expanduser()
+        return [str(path)] if os.access(path, os.X_OK) else [sys.executable, str(path)]
+    found = shutil.which("issue-hub-board")
+    return [found] if found else None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="A markdown issue hub that many agent sessions can share.")
     parser.add_argument("--hub", type=Path, help="hub directory (default: $ISSUE_HUB, else the nearest parent with hub.json)")
@@ -304,20 +323,21 @@ def main() -> None:
     lint_parser = commands.add_parser("lint", help="list open issues missing a Kind or area, or with unknown labels")
     lint_parser.add_argument("--all", action="store_true", help="check closed issues too")
 
-    board_parser = commands.add_parser("board", help="serve the hub as a board in the browser")
+    # The board, viewer and export live in issue-hub-board; these commands hand over to it.
+    board_parser = commands.add_parser("board", help="open the hub in the local board (needs issue-hub-board)")
     board_parser.add_argument("--port", type=int, default=8787)
     board_parser.add_argument("--no-open", action="store_true")
 
-    export_parser = commands.add_parser("export", help="write hubs as a static read-only site (JSON and pages)")
-    export_parser.add_argument("out", type=Path, help="output folder; serve each hub's checkout at <site>/<hub>/hub/")
-    export_parser.add_argument("more", type=Path, nargs="*", metavar="HUB", help="more hubs to include, each with its own hub.json")
-
-    view_parser = commands.add_parser("view", help="serve the read-only viewer, re-exporting on change")
+    view_parser = commands.add_parser("view", help="open the read-only viewer (needs issue-hub-board)")
     view_parser.add_argument("more", type=Path, nargs="*", metavar="HUB", help="more hubs to switch between")
     view_parser.add_argument("--host", default="127.0.0.1")
     view_parser.add_argument("--port", type=int, default=8788)
-    view_parser.add_argument("--out", type=Path, help="export folder (default ~/.cache/issue-hub/viewer)")
     view_parser.add_argument("--no-open", action="store_true")
+
+    export_parser = commands.add_parser("export", help="write the viewer as a static site (needs issue-hub-board)")
+    export_parser.add_argument("out", type=Path)
+    export_parser.add_argument("more", type=Path, nargs="*", metavar="HUB")
+    export_parser.add_argument("--with-files", action="store_true")
 
     args = parser.parse_args()
 
@@ -353,30 +373,19 @@ def main() -> None:
         print(f"rules   {rules if rules.exists() else '(no HUB.md)'}")
     elif args.command == "lint":
         sys.exit(lint(hub, args.all))
-    elif args.command == "board":
-        serve = Path(__file__).resolve().parent / "board" / "serve.py"
-        command = [sys.executable, str(serve), "--hub", str(hub.root), "--port", str(args.port)]
-        if args.no_open:
-            command.append("--no-open")
-        os.execv(sys.executable, command)
-    elif args.command == "export":
-        sys.path.insert(0, str(Path(__file__).resolve().parent / "board"))
-        import export as hubexport
-        roots = [hub.root] + [find_hub(path.expanduser()).root for path in args.more]
-        counts = hubexport.export_all(roots, args.out)
-        print(f"{counts['hubs']} hub(s), {counts['issues']} issues, {counts['projects']} projects; "
-              f"{counts['changed']} files written, {counts['removed']} removed")
-    elif args.command == "view":
-        view = Path(__file__).resolve().parent / "board" / "view.py"
-        command = [sys.executable, str(view), "--hub", str(hub.root), "--host", args.host, "--port", str(args.port)]
-        for path in args.more:
-            command += ["--hub", str(find_hub(path.expanduser()).root)]
-        if args.out:
-            command += ["--out", str(args.out)]
-        if args.no_open:
-            command.append("--no-open")
-        os.execv(sys.executable, command)
-
+    elif args.command in ("board", "view", "export"):
+        board = board_command()
+        if board is None:
+            sys.exit(BOARD_MISSING)
+        more = [str(find_hub(path.expanduser()).root) for path in getattr(args, "more", [])]
+        if args.command == "board":
+            command = [*board, "edit", str(hub.root), "--port", str(args.port)] + (["--no-open"] if args.no_open else [])
+        elif args.command == "view":
+            command = [*board, "view", str(hub.root), *more, "--host", args.host, "--port", str(args.port)]
+            command += ["--no-open"] if args.no_open else []
+        else:
+            command = [*board, "export", str(args.out), str(hub.root), *more] + (["--with-files"] if args.with_files else [])
+        os.execv(command[0], command)
 
 if __name__ == "__main__":
     main()

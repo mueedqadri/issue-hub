@@ -39,14 +39,10 @@ plain files:
 - **House rules travel with the hub.** Each hub's `HUB.md` holds the rules
   only that project has, so a code repo needs no skill of its own: just the
   few lines `init` prints for its AGENTS.md.
-- **A local board.** `issue-hub board` serves a kanban view over the files.
-  Drag to change status; every write is one line and refuses to overwrite a
-  concurrent edit.
-- **A fast read-only viewer.** `issue-hub view` is a Linear-style list and
-  board with ⌘K, keyboard navigation and an issue panel that shows the
-  project's plan and documents. It switches between the hubs of all your
-  projects, and [`deploy/`](./deploy) runs it on a server that pulls the
-  hubs from git.
+- **A board for people.** [issue-hub-board](https://github.com/mueedqadri/issue-hub-board)
+  is a fast, Linear-style web app over the same files, with a
+  [live demo](https://mueedqadri.github.io/issue-hub-board/). `issue-hub view`
+  and `issue-hub board` open it once it's installed.
 
 The hub is its own git repo, separate from the code, so issue churn never
 touches your code history.
@@ -79,15 +75,13 @@ Requires Python 3.10+ and git. macOS and Linux (`fcntl` locking).
 ## Several projects
 
 Give each project its own hub: its own prefix, kinds, labels and house
-rules. The viewer shows them side by side:
+rules. [issue-hub-board](https://github.com/mueedqadri/issue-hub-board)
+shows them side by side and switches between them:
 
 ```sh
-issue-hub --hub ~/notes/myapp-hub view ~/notes/other-hub ~/notes/side-project-hub
+uv tool install git+https://github.com/mueedqadri/issue-hub-board
+issue-hub --hub ~/notes/myapp-hub view ~/notes/other-hub
 ```
-
-`/` opens the hub you used last; switch with the name at the top left, ⌘K,
-or `g` then `h`. To keep the viewer running on a home server or VPS, see
-[`deploy/`](./deploy).
 
 ## Try the example
 
@@ -96,7 +90,7 @@ kinds and labels, a roadmap, one project with its plan, and five issues across
 every status.
 
 ```sh
-skills/issue-hub/scripts/issue-hub --hub example board
+skills/issue-hub/scripts/issue-hub --hub example view   # needs issue-hub-board
 ```
 
 ## Commands
@@ -110,7 +104,7 @@ skills/issue-hub/scripts/issue-hub --hub example board
 | `list [-n N]` | recent reservations |
 | `where` | the hub, prefix, tracked repos, kinds and labels |
 | `lint [--all]` | open issues (or all) missing a Kind or area, or with unknown labels |
-| `board [--port N] [--no-open]` | serve the board |
+| `view [HUB ...]`, `board`, `export DIR` | open the hub in [issue-hub-board](https://github.com/mueedqadri/issue-hub-board), if installed |
 
 The hub is found from `--hub`, then `$ISSUE_HUB`, then the nearest parent
 folder holding `hub.json`.
@@ -119,7 +113,6 @@ folder holding `hub.json`.
 
 ```sh
 python3 tests/test_numbers.py
-python3 tests/test_board.py
 ```
 
 ## License
