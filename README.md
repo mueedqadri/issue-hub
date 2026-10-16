@@ -30,6 +30,9 @@ plain files:
 - **Projects with an illustrated plan.** Each project has a page with a
   shared contract (how done is judged, how it's checked, the order) and a
   one-page HTML plan.
+- **Every page kept in the hub.** Plans, mockups and findings pages are
+  saved next to the issue they belong to and linked from its `## Documents`,
+  so they outlive published links and scratch folders.
 - **Kinds and labels per hub.** Every issue has one Kind (Bug, Feature,
   Improvement or Task by default) and labels from lists the hub keeps in
   `hub.json`, such as its areas. `issue-hub lint` catches anything off-list.
@@ -39,6 +42,10 @@ plain files:
 - **A local board.** `issue-hub board` serves a kanban view over the files.
   Drag to change status; every write is one line and refuses to overwrite a
   concurrent edit.
+- **A fast read-only viewer.** `issue-hub view` is a Linear-style list and
+  board with ⌘K, keyboard navigation and an issue panel that shows the
+  project's plan and documents. `issue-hub export` writes it as a static
+  site to host anywhere, such as a home server.
 
 The hub is its own git repo, separate from the code, so issue churn never
 touches your code history.

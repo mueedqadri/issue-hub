@@ -34,6 +34,12 @@ what is missing and why it matters.>
 - Project: None
 - Related: None
 
+## Documents
+
+<!-- Pages made for this issue live in documents/<lower-case id>/ and are
+linked here, with a published copy's link beside it: `- Name: [file](../documents/abc-12/file.html)` -->
+- None
+
 ## Comments
 
 <!-- After each commit: `<short hash> {{PREFIX}}-<n>: <subject>` then a dated note:

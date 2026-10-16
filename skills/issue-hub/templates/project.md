@@ -9,6 +9,7 @@
 
 ## Documents
 - Illustrated plan: [`<slug>.html`](./<slug>.html)
+<!-- Other pages for the project: documents/<slug>/ or documents/<id>/, linked here. -->
 
 ## Description
 

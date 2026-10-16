@@ -97,10 +97,35 @@ File every problem you find as its own issue, even if you only fix one now.
 3. Write `projects/<slug>.html`: one self-contained, theme-aware page with
    why the project exists, a diagram where it helps, the tasks, and for every
    task its "What the user will notice". If you can publish pages (for
-   example as an Artifact), publish it and link the URL from the project's
-   `## Documents` next to the file. Check old links still work before relying
-   on them.
-4. When scope changes, update the page and republish to the same URL.
+   example as an Artifact), publish it too and link the URL from the
+   project's `## Documents` next to the file (see "Keep every page in the
+   hub").
+4. When scope changes, update the local page first, then republish to the
+   same URL.
+
+## Keep every page in the hub
+
+Every HTML page made for the hub lives in the hub, linked from what it is
+about. A published copy (an Artifact, a gist) is a convenience; the file in
+the hub is the one that counts, because published links die and scratch
+folders get wiped.
+
+- A project's illustrated plan: `projects/<slug>.html`.
+- A page for one issue (mockup, findings, comparison, review):
+  `documents/<id>/<name>.html`, with the id in lower case (`abc-12`). Its
+  images and data go in the same folder, linked by relative path.
+- A page that belongs to no single issue: `documents/<slug>.html`, linked
+  from the ROADMAP or the project it informs.
+- List it under the issue's or project's `## Documents` with a relative link,
+  and the published link beside it if there is one:
+  `- Findings: [findings.html](../documents/abc-12/findings.html) · [published](https://…)`
+- Pages are self-contained: inline CSS and JS, no build step. Video and large
+  image sets do not belong in the hub; link where they live.
+- Save the page before you share it, commit it with the issue change, and
+  update the local file first whenever you change it. Never leave a page only
+  in a scratch folder.
+- If a published link is dead and no copy exists, mark it
+  `(dead link, checked YYYY-MM-DD)` rather than deleting it.
 
 ## Keep the roadmap true
 
@@ -125,6 +150,14 @@ status, Kind, project and label filters, every page rendered, with each
 issue's Kind as a colored badge. Dragging a card or
 adding a comment rewrites exactly one line and refuses the write if the file
 changed on disk since it loaded. Standard-library Python, nothing to install.
+
+`issue-hub view` serves a fast read-only viewer at http://127.0.0.1:8788,
+built like Linear: a list grouped by status or a board, ⌘K to jump anywhere,
+`j`/`k` to move, filter chips, links you can share, and an issue panel that
+shows its project, the project's plan and documents, related issues and the
+issue's files. `issue-hub export <dir>` writes the same viewer as a static
+site (JSON plus pre-rendered pages) for any web server; serve the hub
+checkout at `<site>/hub/`, without dotfiles.
 
 ## Set up a new hub
 
